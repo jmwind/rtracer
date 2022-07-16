@@ -2,8 +2,8 @@ use std::fmt::Display;
 use std::fmt;
 
 enum TuppleType {
-    Point = 1,
-    Vector,
+    Vector = 0,
+    Point,
 }
 
 struct Tupple {
@@ -22,14 +22,14 @@ impl Tupple {
         Tupple {x: x, y: y, z: z, t: TuppleType::Point}
     }
 
-    pub fn add(&mut self, other: &Tupple) {
-        self.x = self.x + other.x;
-        self.y = self.y + other.y;
-        self.z = self.z + other.z;
+    pub fn add(&mut self, _other: &Tupple) {
+        self.x = self.x + _other.x;
+        self.y = self.y + _other.y;
+        self.z = self.z + _other.z;
 
     }
 
-    pub fn sub(&mut self, other: &Tupple) {
+    pub fn sub(&mut self, _other: &Tupple) {
 
     }
 }
