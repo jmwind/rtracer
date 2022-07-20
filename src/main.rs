@@ -2,26 +2,32 @@ use std::fmt;
 use std::fmt::Display;
 
 const EPSILON: f64 = 0.00001;
-
-enum TuppleType {
-    Vector = 0,
-    Point,
-}
+const POINT: f64 = 1.0;
+const VECTOR: f64 = 0.0;
 
 struct Tupple {
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    pub t: TuppleType,
+    pub w: f64
 }
 
 impl Tupple {
     pub fn vector(x: f64, y: f64, z: f64) -> Tupple {
         Tupple {
-            x: x,
-            y: y,
-            z: z,
-            t: TuppleType::Vector,
+            x,
+            y,
+            z,
+            w: 0.0,
+        }
+    }
+
+    pub fn tupple(x: f64, y: f64, z: f64, w:f64) -> Tupple {
+        Tupple {
+            x,
+            y,
+            z,
+            w,
         }
     }
 
@@ -30,34 +36,19 @@ impl Tupple {
             x: x,
             y: y,
             z: z,
-            t: TuppleType::Point,
+            w: 1.0,
         }
-    }
-
-    fn type_value(&self) -> i32 {
-        match self.t {
-            TuppleType::Vector => 0,
-            TuppleType::Point => 1,
-        }
-    }
-
-    fn set_type_from_value(&mut self, t_val: i32) {
-        match t_val {
-            0 => self.t = TuppleType::Vector,
-            1 => self.t = TuppleType::Point,
-            _ => panic!("Invalid type value"),
-        }
-    }
+    }   
 
     pub fn add(&mut self, _other: &Tupple) {
         self.x = self.x + _other.x;
         self.y = self.y + _other.y;
         self.z = self.z + _other.z;
-        let t_val = self.type_value() + _other.type_value();
-        if t_val < 2 {
-            self.set_type_from_value(t_val);
-        } else {
+        let w_val = self.w + _other.w;
+        if w_val > 1.0 {            
             panic!("Can't add a point to a point");
+        } else {
+            self.w = w_val;
         }
     }
 
@@ -65,9 +56,9 @@ impl Tupple {
         self.x = self.x - _other.x;
         self.y = self.y - _other.y;
         self.z = self.z - _other.z;
-        let t_val = self.type_value() - _other.type_value();
-        if t_val >= 0 {
-            self.set_type_from_value(t_val);
+        let w_val = self.w - _other.w;
+        if w_val >= 0.0 {
+            self.w = w_val;
         } else {
             panic!("Can't add substract a point from a vector");
         }
@@ -90,12 +81,8 @@ fn fequals(a: f64, b: f64) -> bool {
 }
 
 impl Display for Tupple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let type_string = match self.t {
-            TuppleType::Point => "Point",
-            TuppleType::Vector => "Vector",
-        };
-        write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, type_string)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {       
+        write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
     }
 }
 
@@ -122,15 +109,15 @@ mod tests {
         assert!(p1.x == 0.0);
         assert!(p1.y == 1.0);
         assert!(p1.z == 1.0);
-        assert!(matches!(p1.t, TuppleType::Point));
+        assert_eq!(p1.w, POINT);
         assert!(v1.x == 4.0);
         assert!(v1.y == 2.0);
         assert!(v1.z == 1.0);
-        assert!(matches!(v1.t, TuppleType::Vector));
+        assert_eq!(v1.w, VECTOR);
         assert!(v2.x == -8.0);
         assert!(v2.y == -12.0);
         assert!(v2.z == -11.0);
-        assert!(matches!(v2.t, TuppleType::Vector));
+        assert_eq!(v2.w, VECTOR);
     }
 
     #[test]
@@ -156,13 +143,13 @@ mod tests {
         assert_eq!(p1.x, 1.0);
         assert_eq!(p1.y, 1.0);
         assert_eq!(p1.z, 6.0);
-        assert!(matches!(p1.t, TuppleType::Point));
+        assert_eq!(p1.w, POINT);
 
         v1.add(&v2);
         assert_eq!(v1.x, -5.0);
         assert_eq!(v1.y, 5.0);
         assert_eq!(v1.z, 9.0);
-        assert!(matches!(v1.t, TuppleType::Vector));
+        assert_eq!(v1.w, VECTOR);
     }
 
     #[test]
@@ -177,19 +164,19 @@ mod tests {
         assert_eq!(p1.x, -2.0);
         assert_eq!(p1.y, -4.0);
         assert_eq!(p1.z, -6.0);
-        assert!(matches!(p1.t, TuppleType::Vector));
+        assert_eq!(p1.w, VECTOR);
 
         p3.sub(&v1);
         assert_eq!(p3.x, -2.0);
         assert_eq!(p3.y, -4.0);
         assert_eq!(p3.z, -6.0);
-        assert!(matches!(p3.t, TuppleType::Point));
+        assert_eq!(p3.w, POINT);
 
         v2.sub(&v1);
         assert_eq!(v2.x, -2.0);
         assert_eq!(v2.y, -4.0);
         assert_eq!(v2.z, -6.0);
-        assert!(matches!(v2.t, TuppleType::Vector));
+        assert_eq!(v2.w, VECTOR);
     }
 
     #[test]
