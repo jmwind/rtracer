@@ -13,6 +13,12 @@ struct Tupple {
     pub w: f64
 }
 
+struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32
+}
+
 impl Tupple {
     pub fn vector(x: f64, y: f64, z: f64) -> Tupple {
         Tupple {
@@ -105,6 +111,30 @@ impl Tupple {
     }
 }
 
+impl Color {
+    // color base 0..1, use new_from_255 for other based initializer
+    pub fn new(r: f32, g: f32, b: f32) -> Color {
+        return Color {r, g, b};
+    }
+
+    pub fn new_from_255(r: u32, g: u32, b: u32) -> Color {
+        return Color {
+            r: r as f32 / 255.0, 
+            g: g as f32 / 255.0,
+            b: b as f32 / 255.0 
+        }
+    }
+
+    pub fn to_u32(&self) -> u32 {
+        let (r, g, b) = ((self.r as u32 * 255), (self.g as u32 * 255), (self.b as u32 * 255));
+        (r << 16) | (g << 8) | b
+    }  
+
+    pub fn mul(&self, _other: &Color) -> Color {
+        return Color::new(self.r * _other.r, self.g * _other.g, self.b * _other.b);
+    }
+ }
+
 fn fequals(a: f64, b: f64) -> bool {
     let n = a - b;
     if n.abs() < EPSILON {
@@ -140,7 +170,8 @@ fn main() {
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in buffer.iter_mut() {
-            *i = 122; // write something more funny here!
+            let c = Color::new_from_255(0,0,255);
+            *i = c.to_u32();
         }
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
@@ -155,6 +186,13 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use crate::*;
+
+    fn approx_equal(a: f32, b: f32, decimal_places: u8) -> bool {
+        let factor = 10.0f32.powi(decimal_places as i32);
+        let a = (a * factor).trunc();
+        let b = (b * factor).trunc();
+        a == b
+    }   
 
     #[test]
     fn tupple_create() {
@@ -324,5 +362,16 @@ mod tests {
         assert_eq!(c2.x, 1.0);
         assert_eq!(c2.y, -2.0);
         assert_eq!(c2.z, 1.0);
+    }
+
+    #[test]
+    fn text_mul_color() {
+        let c1 = Color::new(1.0, 0.2, 0.4);
+        let c2 = Color::new(0.9, 1.0, 0.1);
+        let c3 = c1.mul(&c2);
+        assert!( approx_equal(c3.r, 0.9, 2));
+        assert!( approx_equal(c3.g, 0.2, 2));
+        assert!( approx_equal(c3.b, 0.04, 2));
+
     }
 }
