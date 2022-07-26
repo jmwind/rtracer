@@ -1,41 +1,25 @@
-use std::fmt;
-use std::fmt::Display;
 use minifb::{Key, Window, WindowOptions};
-
-const EPSILON: f64 = 0.00001;
-const POINT: f64 = 1.0;
-const VECTOR: f64 = 0.0;
 
 struct Tupple {
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    pub w: f64
+    pub w: f64,
 }
 
 struct Color {
     pub r: f32,
     pub g: f32,
-    pub b: f32
+    pub b: f32,
 }
 
 impl Tupple {
     pub fn vector(x: f64, y: f64, z: f64) -> Tupple {
-        Tupple {
-            x,
-            y,
-            z,
-            w: 0.0,
-        }
+        Tupple { x, y, z, w: 0.0 }
     }
 
-    pub fn tupple(x: f64, y: f64, z: f64, w:f64) -> Tupple {
-        Tupple {
-            x,
-            y,
-            z,
-            w,
-        }
+    pub fn tupple(x: f64, y: f64, z: f64, w: f64) -> Tupple {
+        Tupple { x, y, z, w }
     }
 
     pub fn point(x: f64, y: f64, z: f64) -> Tupple {
@@ -45,14 +29,14 @@ impl Tupple {
             z: z,
             w: 1.0,
         }
-    }   
+    }
 
     pub fn add(&mut self, _other: &Tupple) {
         self.x = self.x + _other.x;
         self.y = self.y + _other.y;
         self.z = self.z + _other.z;
         let w_val = self.w + _other.w;
-        if w_val > 1.0 {            
+        if w_val > 1.0 {
             panic!("Can't add a point to a point");
         } else {
             self.w = w_val;
@@ -96,58 +80,62 @@ impl Tupple {
     }
 
     pub fn dot(&self, _other: &Tupple) -> f64 {
-        return 
-            self.x * _other.x +
-            self.y * _other.y +
-            self.z * _other.z +
-            self.w * _other.w;
+        return self.x * _other.x + self.y * _other.y + self.z * _other.z + self.w * _other.w;
     }
 
     pub fn cross(&self, _other: &Tupple) -> Tupple {
         return Tupple::vector(
-            self.y * _other.z - self.z * _other.y,            
+            self.y * _other.z - self.z * _other.y,
             self.z * _other.x - self.x * _other.z,
-            self.x * _other.y - self.y * _other.x);
+            self.x * _other.y - self.y * _other.x,
+        );
     }
 }
 
 impl Color {
     // color base 0..1, use new_from_255 for other based initializer
     pub fn new(r: f32, g: f32, b: f32) -> Color {
-        return Color {r, g, b};
+        return Color { r, g, b };
     }
 
     pub fn new_from_255(r: u32, g: u32, b: u32) -> Color {
         return Color {
-            r: r as f32 / 255.0, 
+            r: r as f32 / 255.0,
             g: g as f32 / 255.0,
-            b: b as f32 / 255.0 
-        }
+            b: b as f32 / 255.0,
+        };
     }
 
     pub fn to_u32(&self) -> u32 {
-        let (r, g, b) = ((self.r as u32 * 255), (self.g as u32 * 255), (self.b as u32 * 255));
+        let (r, g, b) = (
+            (self.r as u32 * 255),
+            (self.g as u32 * 255),
+            (self.b as u32 * 255),
+        );
         (r << 16) | (g << 8) | b
-    }  
+    }
+
+    pub fn add(&self, _other: &Color) -> Color {
+        return Color::new(self.r + _other.r, self.g + _other.g, self.b + _other.b);
+    }
 
     pub fn mul(&self, _other: &Color) -> Color {
         return Color::new(self.r * _other.r, self.g * _other.g, self.b * _other.b);
     }
- }
-
-fn fequals(a: f64, b: f64) -> bool {
-    let n = a - b;
-    if n.abs() < EPSILON {
-        return true;
-    } else {
-        return false;
-    }
 }
 
-impl Display for Tupple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {       
-        write!(f, "({}, {}, {}, {})", self.x, self.y, self.z, self.w)
-    }
+struct Projectile {
+    position: Tupple,
+    velocity: Tupple,
+}
+
+struct Environment {
+    gravity: Tupple,
+    wind: Tupple,
+}
+
+fn tick(env: Environment, proj: Projectile) -> Projectile {
+    return proj;
 }
 
 const WIDTH: usize = 900;
@@ -170,14 +158,12 @@ fn main() {
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for i in buffer.iter_mut() {
-            let c = Color::new_from_255(0,0,255);
+            let c = Color::new_from_255(0, 0, 255);
             *i = c.to_u32();
         }
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
-        window
-            .update_with_buffer(&buffer, WIDTH, HEIGHT)
-            .unwrap();
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 
@@ -187,12 +173,25 @@ fn main() {
 mod tests {
     use crate::*;
 
+    const EPSILON: f64 = 0.00001;
+    const POINT: f64 = 1.0;
+    const VECTOR: f64 = 0.0;
+
+    fn fequals(a: f64, b: f64) -> bool {
+        let n = a - b;
+        if n.abs() < EPSILON {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     fn approx_equal(a: f32, b: f32, decimal_places: u8) -> bool {
         let factor = 10.0f32.powi(decimal_places as i32);
         let a = (a * factor).trunc();
         let b = (b * factor).trunc();
         a == b
-    }   
+    }
 
     #[test]
     fn tupple_create() {
@@ -289,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn test_negate() {        
+    fn test_negate() {
         let mut v1 = Tupple::tupple(1.0, -2.0, 3.0, -4.0);
         v1.negate();
         assert_eq!(v1.x, -1.0);
@@ -327,7 +326,6 @@ mod tests {
         assert_eq!(v3.magnitude(), 1.0);
         assert_eq!(v4.magnitude(), 14.0_f64.sqrt());
         assert_eq!(v5.magnitude(), 14.0_f64.sqrt());
-
     }
 
     #[test]
@@ -347,7 +345,7 @@ mod tests {
         let v1 = Tupple::vector(1.0, 2.0, 3.0);
         let v2 = Tupple::vector(2.0, 3.0, 4.0);
         let dot = v1.dot(&v2);
-        assert_eq!(dot, 20.0);        
+        assert_eq!(dot, 20.0);
     }
 
     #[test]
@@ -369,9 +367,8 @@ mod tests {
         let c1 = Color::new(1.0, 0.2, 0.4);
         let c2 = Color::new(0.9, 1.0, 0.1);
         let c3 = c1.mul(&c2);
-        assert!( approx_equal(c3.r, 0.9, 2));
-        assert!( approx_equal(c3.g, 0.2, 2));
-        assert!( approx_equal(c3.b, 0.04, 2));
-
+        assert!(approx_equal(c3.r, 0.9, 2));
+        assert!(approx_equal(c3.g, 0.2, 2));
+        assert!(approx_equal(c3.b, 0.04, 2));
     }
 }
