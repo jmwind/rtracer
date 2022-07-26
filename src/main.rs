@@ -62,6 +62,15 @@ impl Tupple {
         self.w = factor * self.w;
     }
 
+    pub fn mul_r(&self, factor: f64) -> Tupple {
+        return Tupple {
+            x: factor * self.x,
+            y: factor * self.y,
+            z: factor * self.z,
+            w: factor * self.w,
+        };
+    }
+
     pub fn negate(&mut self) {
         self.x = -1.0 * self.x;
         self.y = -1.0 * self.y;
@@ -124,6 +133,8 @@ impl Color {
     }
 }
 
+// ## MAIN ##############################
+
 struct Projectile {
     position: Tupple,
     velocity: Tupple,
@@ -134,8 +145,13 @@ struct Environment {
     wind: Tupple,
 }
 
-fn tick(env: Environment, proj: Projectile) -> Projectile {
-    return proj;
+fn tick(env: Environment, proj: &mut Projectile) {
+    // move to new position
+    proj.position.add(&proj.velocity);
+    // update velocity based on environment
+    let mut gravity = env.gravity;
+    gravity.add(&env.wind);
+    proj.velocity.add(&gravity);
 }
 
 const WIDTH: usize = 900;
@@ -155,15 +171,28 @@ fn main() {
 
     // Limit to max ~60 fps update rate
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+    window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+
+    let mut projectile = Projectile {
+        position: Tupple::point(0.0, 1.0, 0.0),
+        velocity: Tupple::vector(1.0, 1.4, 0.0).mul_r(6.5),
+    };
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for i in buffer.iter_mut() {
-            let c = Color::new_from_255(0, 0, 255);
-            *i = c.to_u32();
+        for _i in 0..1000 {
+            let environment = Environment {
+                gravity: Tupple::vector(0.0, -0.11, 0.0),
+                wind: Tupple::vector(-0.01, 0.0, 0.0),
+            };
+            tick(environment, &mut projectile);
+            let x = projectile.position.x as usize;
+            let y = HEIGHT - projectile.position.y as usize;
+            if x < WIDTH && y < HEIGHT {
+                let index = x + (y * WIDTH);
+                buffer[index] = Color::new_from_255(255, 37, 51).to_u32();
+            }
+            window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
         }
-
-        // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
-        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 
