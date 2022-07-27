@@ -198,6 +198,7 @@ impl Color {
 struct Projectile {
     position: Tupple,
     velocity: Tupple,
+    color: Color,
 }
 
 struct Environment {
@@ -205,13 +206,14 @@ struct Environment {
     wind: Tupple,
 }
 
-fn tick(env: Environment, proj: &mut Projectile) {
-    // move to new position
-    proj.position.add(&proj.velocity);
-    // update velocity based on environment
+fn tick(env: Environment, projectiles: &mut Vec<Projectile>) {
     let mut gravity = env.gravity;
     gravity.add(&env.wind);
-    proj.velocity.add(&gravity);
+    // move to new position
+    for proj in projectiles {
+        proj.position.add(&proj.velocity);
+        proj.velocity.add(&gravity);
+    }
 }
 
 const WIDTH: usize = 900;
@@ -233,10 +235,23 @@ fn main() {
     window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
     window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
 
-    let mut projectile = Projectile {
+    let mut projectiles: Vec<Projectile> = Vec::new();
+
+    projectiles.push(Projectile {
         position: Tupple::point(0.0, 1.0, 0.0),
         velocity: Tupple::vector(1.0, 1.4, 0.0).mul_r(6.5),
-    };
+        color: Color::new_from_255(255, 55, 180),
+    });
+    projectiles.push(Projectile {
+        position: Tupple::point(0.0, 7.0, 0.0),
+        velocity: Tupple::vector(1.0, 1.5, 0.0).mul_r(5.9),
+        color: Color::new_from_255(0, 0, 255),
+    });
+    projectiles.push(Projectile {
+        position: Tupple::point(0.0, 14.0, 0.0),
+        velocity: Tupple::vector(1.0, 1.2, 0.0).mul_r(5.0),
+        color: Color::new_from_255(255, 0, 0),
+    });
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
         for _i in 0..250 {
@@ -244,13 +259,17 @@ fn main() {
                 gravity: Tupple::vector(0.0, -0.11, 0.0),
                 wind: Tupple::vector(-0.01, 0.0, 0.0),
             };
-            tick(environment, &mut projectile);
-            let x = projectile.position.x as usize;
-            let y = HEIGHT - projectile.position.y as usize;
-            if x < WIDTH && y < HEIGHT {
-                let index = x + (y * WIDTH);
-                buffer[index] = Color::new_from_255(255, 255, 180).to_u32();
+            tick(environment, &mut projectiles);
+
+            for projectile in &projectiles {
+                let x = projectile.position.x as usize;
+                let y = HEIGHT - projectile.position.y as usize;
+                if x < WIDTH && y < HEIGHT {
+                    let index = x + (y * WIDTH);
+                    buffer[index] = projectile.color.to_u32();
+                }
             }
+
             window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
         }
     }
