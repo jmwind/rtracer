@@ -13,6 +13,39 @@ struct Color {
     pub b: f32,
 }
 
+struct Matrix2 {
+    rows: [[f32; 2]; 2],
+}
+
+struct Matrix3 {
+    rows: [[f32; 3]; 3],
+}
+
+struct Matrix4 {
+    rows: [[f32; 4]; 4],
+}
+
+impl Matrix2 {
+    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
+        let val = self.rows.get(row)?.get(col)?;
+        Some(*val)
+    }
+}
+
+impl Matrix3 {
+    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
+        let val = self.rows.get(row)?.get(col)?;
+        Some(*val)
+    }
+}
+
+impl Matrix4 {
+    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
+        let val = self.rows.get(row)?.get(col)?;
+        Some(*val)
+    }
+}
+
 impl Tupple {
     pub fn vector(x: f64, y: f64, z: f64) -> Tupple {
         Tupple { x, y, z, w: 0.0 }
@@ -43,6 +76,15 @@ impl Tupple {
         }
     }
 
+    pub fn add_r(&self, _other: &Tupple) -> Tupple {
+        return Tupple {
+            x: self.x + _other.x,
+            y: self.y + _other.y,
+            z: self.z + _other.z,
+            w: self.w + _other.w,
+        };
+    }
+
     pub fn sub(&mut self, _other: &Tupple) {
         self.x = self.x - _other.x;
         self.y = self.y - _other.y;
@@ -53,6 +95,15 @@ impl Tupple {
         } else {
             panic!("Can't add substract a point from a vector");
         }
+    }
+
+    pub fn sub_r(&self, _other: &Tupple) -> Tupple {
+        return Tupple {
+            x: self.x - _other.x,
+            y: self.y - _other.y,
+            z: self.z - _other.z,
+            w: self.w - _other.w,
+        };
     }
 
     pub fn mul(&mut self, factor: f64) {
@@ -76,6 +127,15 @@ impl Tupple {
         self.y = -1.0 * self.y;
         self.z = -1.0 * self.z;
         self.w = -1.0 * self.w;
+    }
+
+    pub fn negate_r(&self) -> Tupple {
+        return Tupple {
+            x: -1.0 * self.x,
+            y: -1.0 * self.y,
+            z: -1.0 * self.z,
+            w: -1.0 * self.w,
+        };
     }
 
     pub fn magnitude(&self) -> f64 {
@@ -160,7 +220,7 @@ fn main() {
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
     let mut window = Window::new(
-        "Test - ESC to exit",
+        "RTRACER JML - ESC to exit",
         WIDTH,
         HEIGHT,
         WindowOptions::default(),
@@ -179,7 +239,7 @@ fn main() {
     };
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for _i in 0..1000 {
+        for _i in 0..250 {
             let environment = Environment {
                 gravity: Tupple::vector(0.0, -0.11, 0.0),
                 wind: Tupple::vector(-0.01, 0.0, 0.0),
@@ -189,7 +249,7 @@ fn main() {
             let y = HEIGHT - projectile.position.y as usize;
             if x < WIDTH && y < HEIGHT {
                 let index = x + (y * WIDTH);
-                buffer[index] = Color::new_from_255(255, 37, 51).to_u32();
+                buffer[index] = Color::new_from_255(255, 255, 180).to_u32();
             }
             window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
         }
@@ -392,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn text_mul_color() {
+    fn test_mul_color() {
         let c1 = Color::new(1.0, 0.2, 0.4);
         let c2 = Color::new(0.9, 1.0, 0.1);
         let c3 = c1.mul(&c2);
@@ -400,4 +460,7 @@ mod tests {
         assert!(approx_equal(c3.g, 0.2, 2));
         assert!(approx_equal(c3.b, 0.04, 2));
     }
+
+    #[test]
+    fn test_matrix_new() {}
 }
