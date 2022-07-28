@@ -13,37 +13,8 @@ struct Color {
     pub b: f32,
 }
 
-struct Matrix2 {
-    rows: [[f32; 2]; 2],
-}
-
-struct Matrix3 {
-    rows: [[f32; 3]; 3],
-}
-
-struct Matrix4 {
-    rows: [[f32; 4]; 4],
-}
-
-impl Matrix2 {
-    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
-        let val = self.rows.get(row)?.get(col)?;
-        Some(*val)
-    }
-}
-
-impl Matrix3 {
-    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
-        let val = self.rows.get(row)?.get(col)?;
-        Some(*val)
-    }
-}
-
-impl Matrix4 {
-    pub fn get(&self, row: usize, col: usize) -> Option<f32> {
-        let val = self.rows.get(row)?.get(col)?;
-        Some(*val)
-    }
+struct Matrix {
+    //rows: vec![[f32; N]; N],
 }
 
 impl Tupple {
@@ -254,24 +225,22 @@ fn main() {
     });
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
-        for _i in 0..250 {
-            let environment = Environment {
-                gravity: Tupple::vector(0.0, -0.11, 0.0),
-                wind: Tupple::vector(-0.01, 0.0, 0.0),
-            };
-            tick(environment, &mut projectiles);
+        let environment = Environment {
+            gravity: Tupple::vector(0.0, -0.11, 0.0),
+            wind: Tupple::vector(-0.01, 0.0, 0.0),
+        };
+        tick(environment, &mut projectiles);
 
-            for projectile in &projectiles {
-                let x = projectile.position.x as usize;
-                let y = HEIGHT - projectile.position.y as usize;
-                if x < WIDTH && y < HEIGHT {
-                    let index = x + (y * WIDTH);
-                    buffer[index] = projectile.color.to_u32();
-                }
+        for projectile in &projectiles {
+            let x = projectile.position.x as usize;
+            let y = HEIGHT - projectile.position.y as usize;
+            if x < WIDTH && y < HEIGHT {
+                let index = x + (y * WIDTH);
+                buffer[index] = projectile.color.to_u32();
             }
-
-            window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
         }
+
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
     }
 }
 
