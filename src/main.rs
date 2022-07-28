@@ -1,3 +1,5 @@
+use std::ops;
+
 use minifb::{Key, Window, WindowOptions};
 
 struct Tupple {
@@ -13,8 +15,208 @@ struct Color {
     pub b: f32,
 }
 
-struct Matrix {
-    //rows: vec![[f32; N]; N],
+#[derive(PartialEq, Debug, Clone)]
+pub struct Matrix<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> {
+    data: Vec<T>,
+    n_rows: usize,
+    n_cols: usize,
+}
+
+impl<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> Matrix<T> {
+    pub fn new(mut v: Vec<Vec<T>>) -> Matrix<T> {
+        let n_rows = v.len();
+        let n_cols = v[0].len();
+        let mut data = vec![];
+        for row in v.iter_mut() {
+            while row.len() > 0 {
+                data.push(row.remove(0));
+            }
+        }
+        Matrix {
+            data,
+            n_rows,
+            n_cols,
+        }
+    }
+
+    /// Creates a matrix by using the 1-d vector. The matrix is 'filled' row after row
+    /// from the linear data structure.
+    pub fn create_from_data(data: Vec<T>, n_rows: usize, n_cols: usize) -> Matrix<T> {
+        if data.len() != n_rows * n_cols {
+            panic!("not compatible dimension!");
+        }
+        Matrix {
+            data,
+            n_rows,
+            n_cols,
+        }
+    }
+
+    /// Obtain the element at row `i` and column `j`.
+    pub fn get(&self, i: usize, j: usize) -> T {
+        return self.data[i * self.n_cols + j];
+    }
+
+    /// Obtain the `i`'th row as a 1-d matrix.
+    pub fn get_row(&self, i: usize) -> Matrix<T> {
+        let mut row = vec![];
+        for e in &self.data[i * self.n_cols..(i + 1) * self.n_cols] {
+            row.push(*e);
+        }
+        let n_cols = row.len();
+        Matrix::create_from_data(row, 1, n_cols)
+    }
+
+    /// Obtain the `i`'th column as a 1-d matrix.
+    pub fn get_col(&self, i: usize) -> Matrix<T> {
+        let col = self
+            .iter()
+            .filter(|(_, _, col)| *col == i)
+            .map(|(e, _, _)| *e)
+            .collect::<Vec<T>>();
+        let n_rows = col.len();
+        Matrix::create_from_data(col, n_rows, 1)
+    }
+
+    /// Create an immutable iterator over the matrix.
+    /// The iteration is performed row after row.
+    pub fn iter<'a>(&'a self) -> MatrixIterator<'a, T> {
+        MatrixIterator::new(0, 0, 0, &self.data, self.n_rows, self.n_cols)
+    }
+
+    /// Create an mutable iterator over the matrix.
+    /// The iteration is performed row after row.
+    pub fn iter_mut<'a>(&'a mut self) -> MatrixIteratorMut<'a, T> {
+        MatrixIteratorMut::new(0, 0, &mut self.data, self.n_rows, self.n_cols)
+    }
+
+    /// Transposes a copy of the matrix and returns the result.
+    pub fn trans(&self) -> Matrix<T> {
+        let mut data = vec![];
+        for j in 0..self.n_cols {
+            for i in 0..self.n_rows {
+                data.push(self.data[j + i * self.n_cols]);
+            }
+        }
+        Matrix::create_from_data(data, self.n_cols, self.n_rows)
+    }
+}
+
+impl<T: Copy + PartialEq + std::ops::Mul<Output = T> + std::ops::Add<Output = T>>
+    ops::Mul<Matrix<T>> for Matrix<T>
+{
+    type Output = Matrix<T>;
+    fn mul(self, other: Self) -> Matrix<T> {
+        let mut data: Vec<T> = Vec::with_capacity(self.n_cols * self.n_rows);
+        for r in 0..self.n_rows {
+            for c in 0..self.n_cols {
+                let index = c + (r * (self.n_cols));
+                let new_value = self.get(r, 0) * other.get(0, c)
+                    + self.get(r, 1) * other.get(1, c)
+                    + self.get(r, 2) * other.get(2, c)
+                    + self.get(r, 3) * other.get(3, c);
+                data.insert(index, new_value);
+            }
+        }
+        return Matrix::create_from_data(data, self.n_rows, self.n_cols);
+    }
+}
+
+pub struct MatrixIteratorMut<'a, T: Copy> {
+    row_idx: usize,
+    col_idx: usize,
+    data: &'a mut [T],
+    n_rows: usize,
+    n_cols: usize,
+}
+
+impl<'a, T: Copy> MatrixIteratorMut<'a, T> {
+    pub fn new(
+        row_idx: usize,
+        col_idx: usize,
+        data: &'a mut [T],
+        n_rows: usize,
+        n_cols: usize,
+    ) -> MatrixIteratorMut<'a, T> {
+        MatrixIteratorMut {
+            row_idx,
+            col_idx,
+            data,
+            n_rows,
+            n_cols,
+        }
+    }
+}
+
+impl<'a, T: Copy> std::iter::Iterator for MatrixIteratorMut<'a, T> {
+    type Item = (&'a mut T, usize, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.col_idx == self.n_cols {
+            self.row_idx += 1;
+            self.col_idx = 0;
+        }
+        return if self.row_idx == self.n_rows {
+            None
+        } else {
+            let col_idx = self.col_idx;
+            self.col_idx += 1;
+            let data = std::mem::replace(&mut self.data, &mut []);
+            if let Some((v, rest)) = data.split_first_mut() {
+                self.data = rest;
+                Some((v, self.row_idx, col_idx))
+            } else {
+                None
+            }
+        };
+    }
+}
+
+pub struct MatrixIterator<'a, T: Copy> {
+    row_idx: usize,
+    col_idx: usize,
+    idx: usize,
+    data: &'a [T],
+    n_rows: usize,
+    n_cols: usize,
+}
+
+impl<'a, T: Copy> MatrixIterator<'a, T> {
+    pub fn new(
+        row_idx: usize,
+        col_idx: usize,
+        idx: usize,
+        data: &'a [T],
+        n_rows: usize,
+        n_cols: usize,
+    ) -> MatrixIterator<'a, T> {
+        MatrixIterator {
+            row_idx,
+            col_idx,
+            idx,
+            data,
+            n_rows,
+            n_cols,
+        }
+    }
+}
+
+impl<'a, T: Copy> std::iter::Iterator for MatrixIterator<'a, T> {
+    type Item = (&'a T, usize, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.col_idx == self.n_cols {
+            self.row_idx += 1;
+            self.col_idx = 0;
+        }
+        return if self.row_idx == self.n_rows {
+            None
+        } else {
+            let col_idx = self.col_idx;
+            let idx = self.idx;
+            self.col_idx += 1;
+            self.idx += 1;
+            Some((&self.data[idx], self.row_idx, col_idx))
+        };
+    }
 }
 
 impl Tupple {
@@ -450,5 +652,109 @@ mod tests {
     }
 
     #[test]
-    fn test_matrix_new() {}
+    fn test_matrix_iter() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(
+            m.iter().collect::<Vec<(&u32, usize, usize)>>(),
+            vec![(&0, 0, 0), (&1, 0, 1), (&2, 1, 0), (&3, 1, 1)]
+        );
+    }
+
+    #[test]
+    fn test_matrix_iter_mut() {
+        let mut m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(
+            m.iter_mut().collect::<Vec<(&mut u32, usize, usize)>>(),
+            vec![
+                (&mut 0, 0, 0),
+                (&mut 1, 0, 1),
+                (&mut 2, 1, 0),
+                (&mut 3, 1, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_matrix_get_row_1() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(m.get_row(0), Matrix::create_from_data(vec![0, 1], 1, 2));
+    }
+
+    #[test]
+    fn test_matrix_get_row_1f() {
+        let m = Matrix::new(vec![
+            vec![0.0, 1.0, 2.0],
+            vec![3.0, 4.0, 5.0],
+            vec![6.0, 7.0, 8.0],
+        ]);
+        assert_eq!(
+            m.get_row(0),
+            Matrix::create_from_data(vec![0.0, 1.0, 2.0], 1, 3)
+        );
+        assert_eq!(
+            m.get_row(1),
+            Matrix::create_from_data(vec![3.0, 4.0, 5.0], 1, 3)
+        );
+        assert_eq!(
+            m.get_row(2),
+            Matrix::create_from_data(vec![6.0, 7.0, 8.0], 1, 3)
+        );
+    }
+
+    #[test]
+    fn test_matrix_get_row_2() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(m.get_row(1), Matrix::create_from_data(vec![2, 3], 1, 2));
+    }
+
+    #[test]
+    fn test_matrix_get_col_1() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(m.get_col(0), Matrix::create_from_data(vec![0, 2], 2, 1));
+    }
+
+    #[test]
+    fn test_matrix_get_col_2() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(m.get_col(1), Matrix::create_from_data(vec![1, 3], 2, 1));
+    }
+
+    #[test]
+    fn test_matrix_trans() {
+        let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        assert_eq!(m.trans(), Matrix::new(vec![vec![0, 2], vec![1, 3]]));
+    }
+
+    #[test]
+    fn test_matrix_equality() {
+        let m1 = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        let m2 = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
+        let m3 = Matrix::new(vec![vec![0, 1], vec![6, 3]]);
+        assert!(m1 == m2);
+        assert_ne!(m1, m3);
+    }
+
+    #[test]
+    fn test_matrix_multiply() {
+        let m1 = Matrix::new(vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 8, 7, 6],
+            vec![5, 4, 3, 2],
+        ]);
+        let m2 = Matrix::new(vec![
+            vec![-2, 1, 2, 3],
+            vec![3, 2, 1, -1],
+            vec![4, 3, 6, 5],
+            vec![1, 2, 7, 8],
+        ]);
+        let m3 = Matrix::new(vec![
+            vec![20, 22, 50, 48],
+            vec![44, 54, 114, 108],
+            vec![40, 58, 110, 102],
+            vec![16, 26, 46, 42],
+        ]);
+        let result = m1 * m2;
+        assert!(result == m3);
+    }
 }
