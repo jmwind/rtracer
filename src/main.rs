@@ -16,13 +16,26 @@ struct Color {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub struct Matrix<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> {
+pub struct Matrix<
+    T: Copy
+        + PartialEq
+        + std::ops::Mul<Output = T>
+        + std::ops::Add<Output = T>
+        + std::ops::Sub<Output = T>,
+> {
     data: Vec<T>,
     n_rows: usize,
     n_cols: usize,
 }
 
-impl<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> Matrix<T> {
+impl<
+        T: Copy
+            + PartialEq
+            + std::ops::Mul<Output = T>
+            + std::ops::Add<Output = T>
+            + std::ops::Sub<Output = T>,
+    > Matrix<T>
+{
     pub fn new(mut v: Vec<Vec<T>>) -> Matrix<T> {
         let n_rows = v.len();
         let n_cols = v[0].len();
@@ -52,6 +65,41 @@ impl<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> Matrix<T> {
         }
     }
 
+    pub fn create_column_from_data(data: Vec<T>) -> Matrix<T> {
+        let n_rows = data.len();
+        Matrix {
+            data: data,
+            n_rows: n_rows,
+            n_cols: 1,
+        }
+    }
+
+    pub fn identity_f32() -> Matrix<f32> {
+        return Matrix::new(vec![
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn identity_i32() -> Matrix<i32> {
+        return Matrix::new(vec![
+            vec![1, 0, 0, 0],
+            vec![0, 1, 0, 0],
+            vec![0, 0, 1, 0],
+            vec![0, 0, 0, 1],
+        ]);
+    }
+
+    pub fn determinant_i32(m: &Matrix<i32>) -> i32 {
+        return m.determinant(0, -1);
+    }
+
+    pub fn determinant_f32(m: &Matrix<f32>) -> f32 {
+        return m.determinant(0.0, -1.0);
+    }
+
     /// Obtain the element at row `i` and column `j`.
     pub fn get(&self, i: usize, j: usize) -> T {
         return self.data[i * self.n_cols + j];
@@ -78,6 +126,18 @@ impl<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> Matrix<T> {
         Matrix::create_from_data(col, n_rows, 1)
     }
 
+    pub fn submatrix(&self, row: usize, col: usize) -> Matrix<T> {
+        let mut data = vec![];
+        for row_num in 0..self.n_rows {
+            for col_num in 0..self.n_cols {
+                if row_num != row && col_num != col {
+                    data.push(self.data[col_num + row_num * self.n_cols]);
+                }
+            }
+        }
+        Matrix::create_from_data(data, self.n_cols - 1, self.n_rows - 1)
+    }
+
     /// Create an immutable iterator over the matrix.
     /// The iteration is performed row after row.
     pub fn iter<'a>(&'a self) -> MatrixIterator<'a, T> {
@@ -100,25 +160,69 @@ impl<T: Copy + PartialEq + std::ops::Mul + std::ops::Add> Matrix<T> {
         }
         Matrix::create_from_data(data, self.n_cols, self.n_rows)
     }
+
+    pub fn determinant(&self, initial: T, transform: T) -> T {
+        let mut determinant = initial;
+        if self.data.len() == 4 {
+            let ad = self.get(0, 0) * self.get(1, 1);
+            let bc = self.get(0, 1) * self.get(1, 0);
+            determinant = ad - bc;
+        } else {
+            for col in 0..self.n_cols {
+                determinant =
+                    determinant + self.get(0, col) * self.cofactor(0, col, initial, transform);
+            }
+        }
+        return determinant;
+    }
+
+    pub fn minor(&self, row: usize, col: usize, initial: T, transform: T) -> T {
+        let m = self.submatrix(row, col);
+        return m.determinant(initial, transform);
+    }
+
+    pub fn cofactor(&self, row: usize, col: usize, initial: T, transform: T) -> T {
+        let minor = self.minor(row, col, initial, transform);
+        if (row + col) % 2 == 0 {
+            return minor;
+        } else {
+            return minor * transform;
+        }
+    }
 }
 
-impl<T: Copy + PartialEq + std::ops::Mul<Output = T> + std::ops::Add<Output = T>>
-    ops::Mul<Matrix<T>> for Matrix<T>
+impl<
+        T: Copy
+            + PartialEq
+            + std::ops::Mul<Output = T>
+            + std::ops::Add<Output = T>
+            + std::ops::Sub<Output = T>,
+    > ops::Mul<Matrix<T>> for Matrix<T>
 {
     type Output = Matrix<T>;
     fn mul(self, other: Self) -> Matrix<T> {
+        // result will always be the smaller size vector
+        let mut it_cols = self.n_cols;
+        if it_cols > other.n_cols {
+            it_cols = other.n_cols;
+        }
+
         let mut data: Vec<T> = Vec::with_capacity(self.n_cols * self.n_rows);
         for r in 0..self.n_rows {
-            for c in 0..self.n_cols {
-                let index = c + (r * (self.n_cols));
-                let new_value = self.get(r, 0) * other.get(0, c)
-                    + self.get(r, 1) * other.get(1, c)
-                    + self.get(r, 2) * other.get(2, c)
-                    + self.get(r, 3) * other.get(3, c);
+            for c in 0..it_cols {
+                let index = c + (r * (it_cols));
+                let mut other_column = c;
+                if other.n_cols != self.n_cols {
+                    other_column = 0;
+                }
+                let new_value = self.get(r, 0) * other.get(0, other_column)
+                    + self.get(r, 1) * other.get(1, other_column)
+                    + self.get(r, 2) * other.get(2, other_column)
+                    + self.get(r, 3) * other.get(3, other_column);
                 data.insert(index, new_value);
             }
         }
-        return Matrix::create_from_data(data, self.n_rows, self.n_cols);
+        return Matrix::create_from_data(data, self.n_rows, it_cols);
     }
 }
 
@@ -723,6 +827,9 @@ mod tests {
     fn test_matrix_trans() {
         let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
         assert_eq!(m.trans(), Matrix::new(vec![vec![0, 2], vec![1, 3]]));
+
+        let identity: Matrix<i32> = Matrix::<i32>::identity_i32();
+        assert_eq!(identity.trans(), Matrix::<i32>::identity_i32());
     }
 
     #[test]
@@ -756,5 +863,109 @@ mod tests {
         ]);
         let result = m1 * m2;
         assert!(result == m3);
+
+        let m4 = Matrix::new(vec![
+            vec![1, 2, 3, 4],
+            vec![2, 4, 4, 2],
+            vec![8, 6, 4, 1],
+            vec![0, 0, 0, 1],
+        ]);
+
+        let m5 = Matrix::create_column_from_data(vec![1, 2, 3, 1]);
+        let result2 = Matrix::create_column_from_data(vec![18, 24, 33, 1]);
+
+        let m6 = m4 * m5;
+        assert_eq!(m6, result2);
+    }
+
+    #[test]
+    fn test_matrix_identity() {
+        let m1 = Matrix::new(vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 8, 7, 6],
+            vec![5, 4, 3, 2],
+        ]);
+        let m2 = Matrix::new(vec![
+            vec![1, 2, 3, 4],
+            vec![5, 6, 7, 8],
+            vec![9, 8, 7, 6],
+            vec![5, 4, 3, 2],
+        ]);
+        let identity: Matrix<i32> = Matrix::<i32>::identity_i32();
+
+        let result = m1 * identity;
+        assert_eq!(m2, result);
+
+        let m11 = Matrix::new(vec![
+            vec![1.0, 2.0, 3.0, 4.0],
+            vec![5.0, 6.0, 7.0, 8.0],
+            vec![9.0, 8.0, 7.0, 6.0],
+            vec![5.0, 4.0, 3.0, 2.0],
+        ]);
+        let m21 = Matrix::new(vec![
+            vec![1.0, 2.0, 3.0, 4.0],
+            vec![5.0, 6.0, 7.0, 8.0],
+            vec![9.0, 8.0, 7.0, 6.0],
+            vec![5.0, 4.0, 3.0, 2.0],
+        ]);
+
+        let identity: Matrix<f32> = Matrix::<f32>::identity_f32();
+
+        let result2 = m11 * identity;
+        assert_eq!(m21, result2);
+    }
+
+    #[test]
+    fn test_matrix_determinant() {
+        let m1 = Matrix::new(vec![vec![1, 5], vec![-3, 2]]);
+        assert_eq!(Matrix::<i32>::determinant_i32(&m1), 17);
+
+        let m1 = Matrix::new(vec![vec![1.0, 5.0], vec![-3.0, 2.0]]);
+        assert_eq!(Matrix::<f32>::determinant_f32(&m1), 17.0);
+    }
+
+    #[test]
+    fn test_matrix_submatrix() {
+        let m1 = Matrix::new(vec![vec![1, 5, 0], vec![-3, 2, 7], vec![0, 6, 3]]);
+        let m1_result = Matrix::new(vec![vec![-3, 2], vec![0, 6]]);
+        let m2 = Matrix::new(vec![
+            vec![-6, 1, 1, 6],
+            vec![-8, 5, 8, 6],
+            vec![-1, 0, 8, 2],
+            vec![-7, 1, -1, 1],
+        ]);
+        let m2_result = Matrix::new(vec![vec![-6, 1, 6], vec![-8, 8, 6], vec![-7, -1, 1]]);
+        assert_eq!(m1.submatrix(0, 2), m1_result);
+        assert_eq!(m2.submatrix(2, 1), m2_result);
+    }
+
+    #[test]
+    fn test_matrix_minor() {
+        let m = Matrix::new(vec![vec![3, 5, 0], vec![2, -1, -7], vec![6, -1, 5]]);
+        assert_eq!(m.minor(1, 0, 0, -1), 25);
+    }
+
+    #[test]
+    fn test_matrix_cofactor() {
+        let m = Matrix::new(vec![vec![3, 5, 0], vec![2, -1, -7], vec![6, -1, 5]]);
+        assert_eq!(m.cofactor(1, 0, 0, -1), -25);
+    }
+
+    #[test]
+    fn test_matrix_determinant_large() {
+        let m = Matrix::new(vec![vec![1, 2, 6], vec![-5, 8, -4], vec![2, 6, 4]]);
+        assert!(m.cofactor(0, 0, 0, -1) == 56);
+        assert!(m.cofactor(0, 1, 0, -1) == 12);
+        assert!(m.cofactor(0, 2, 0, -1) == -46);
+        assert!(m.determinant(0, -1) == -196);
+
+        let m = Matrix::new(vec![
+            vec![-2, -8, 3, 5],
+            vec![-3, 1, 7, 3],
+            vec![1, 2, -9, 6],
+            vec![-6, 7, 7, -9],
+        ]);
+        assert!(m.determinant(0, -1) == -4071);
     }
 }
