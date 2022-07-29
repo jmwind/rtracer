@@ -21,7 +21,8 @@ pub struct Matrix<
         + PartialEq
         + std::ops::Mul<Output = T>
         + std::ops::Add<Output = T>
-        + std::ops::Sub<Output = T>,
+        + std::ops::Sub<Output = T>
+        + std::ops::Div<Output = T>,
 > {
     data: Vec<T>,
     n_rows: usize,
@@ -33,7 +34,8 @@ impl<
             + PartialEq
             + std::ops::Mul<Output = T>
             + std::ops::Add<Output = T>
-            + std::ops::Sub<Output = T>,
+            + std::ops::Sub<Output = T>
+            + std::ops::Div<Output = T>,
     > Matrix<T>
 {
     pub fn new(mut v: Vec<Vec<T>>) -> Matrix<T> {
@@ -176,6 +178,22 @@ impl<
         return determinant;
     }
 
+    pub fn inverse(&self, initial: T, transform: T) -> Matrix<T> {
+        let d = self.determinant(initial, transform);
+        if d == transform {
+            panic!("not invertable");
+        }
+
+        let mut data = vec![];
+        for row in 0..self.n_rows {
+            for col in 0..self.n_cols {
+                let c = self.cofactor(row, col, initial, transform);
+                data.push(c / d);
+            }
+        }
+        return Matrix::create_from_data(data, self.n_cols, self.n_rows).trans();
+    }
+
     pub fn minor(&self, row: usize, col: usize, initial: T, transform: T) -> T {
         let m = self.submatrix(row, col);
         return m.determinant(initial, transform);
@@ -196,21 +214,21 @@ impl<
             + PartialEq
             + std::ops::Mul<Output = T>
             + std::ops::Add<Output = T>
-            + std::ops::Sub<Output = T>,
-    > ops::Mul<Matrix<T>> for Matrix<T>
+            + std::ops::Sub<Output = T>
+            + std::ops::Div<Output = T>,
+    > ops::Mul<&Matrix<T>> for &Matrix<T>
 {
     type Output = Matrix<T>;
-    fn mul(self, other: Self) -> Matrix<T> {
+    fn mul(self, other: &Matrix<T>) -> Matrix<T> {
         // result will always be the smaller size vector
         let mut it_cols = self.n_cols;
         if it_cols > other.n_cols {
             it_cols = other.n_cols;
         }
 
-        let mut data: Vec<T> = Vec::with_capacity(self.n_cols * self.n_rows);
+        let mut data = vec![];
         for r in 0..self.n_rows {
             for c in 0..it_cols {
-                let index = c + (r * (it_cols));
                 let mut other_column = c;
                 if other.n_cols != self.n_cols {
                     other_column = 0;
@@ -219,7 +237,7 @@ impl<
                     + self.get(r, 1) * other.get(1, other_column)
                     + self.get(r, 2) * other.get(2, other_column)
                     + self.get(r, 3) * other.get(3, other_column);
-                data.insert(index, new_value);
+                data.push(new_value);
             }
         }
         return Matrix::create_from_data(data, self.n_rows, it_cols);
@@ -576,6 +594,15 @@ mod tests {
         a == b
     }
 
+    fn fmatrix_equals(m1: Matrix<f64>, m2: Matrix<f64>) -> bool {
+        for elem in m1.iter() {
+            if !fequals(*elem.0, m2.get(elem.1, elem.2)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     #[test]
     fn tupple_create() {
         let p1 = Tupple::point(0.0, 1.0, 1.0);
@@ -861,7 +888,7 @@ mod tests {
             vec![40, 58, 110, 102],
             vec![16, 26, 46, 42],
         ]);
-        let result = m1 * m2;
+        let result = &m1 * &m2;
         assert!(result == m3);
 
         let m4 = Matrix::new(vec![
@@ -874,7 +901,7 @@ mod tests {
         let m5 = Matrix::create_column_from_data(vec![1, 2, 3, 1]);
         let result2 = Matrix::create_column_from_data(vec![18, 24, 33, 1]);
 
-        let m6 = m4 * m5;
+        let m6 = &m4 * &m5;
         assert_eq!(m6, result2);
     }
 
@@ -894,7 +921,7 @@ mod tests {
         ]);
         let identity: Matrix<i32> = Matrix::<i32>::identity_i32();
 
-        let result = m1 * identity;
+        let result = &m1 * &identity;
         assert_eq!(m2, result);
 
         let m11 = Matrix::new(vec![
@@ -912,7 +939,7 @@ mod tests {
 
         let identity: Matrix<f32> = Matrix::<f32>::identity_f32();
 
-        let result2 = m11 * identity;
+        let result2 = &m11 * &identity;
         assert_eq!(m21, result2);
     }
 
@@ -967,5 +994,87 @@ mod tests {
             vec![-6, 7, 7, -9],
         ]);
         assert!(m.determinant(0, -1) == -4071);
+    }
+
+    #[test]
+    fn test_matrix_inversion() {
+        let m = Matrix::new(vec![
+            vec![6, 4, 4, 4],
+            vec![5, 5, 7, 6],
+            vec![4, -9, 3, -7],
+            vec![9, 1, 7, -6],
+        ]);
+        assert!(Matrix::<i32>::determinant_i32(&m) == -2120);
+        let m = Matrix::new(vec![
+            vec![-4, 2, -2, -3],
+            vec![9, 6, 2, 6],
+            vec![0, -5, 1, -5],
+            vec![0, 0, 0, 0],
+        ]);
+        assert!(Matrix::<i32>::determinant_i32(&m) == 0);
+        let m = Matrix::new(vec![
+            vec![-5.0, 2.0, 6.0, -8.0],
+            vec![1.0, -5.0, 1.0, 8.0],
+            vec![7.0, 7.0, -6.0, -7.0],
+            vec![1.0, -3.0, 7.0, 4.0],
+        ]);
+        let m_result = Matrix::new(vec![
+            vec![0.21805, 0.45113, 0.24060, -0.04511],
+            vec![-0.80827, -1.45677, -0.44361, 0.52068],
+            vec![-0.07895, -0.22368, -0.05263, 0.19737],
+            vec![-0.52256, -0.81391, -0.30075, 0.30639],
+        ]);
+        let new_m = m.inverse(0.0, -1.0);
+        assert!(fmatrix_equals(m_result, new_m));
+
+        let m = Matrix::new(vec![
+            vec![8.0, -5.0, 9.0, 2.0],
+            vec![7.0, 5.0, 6.0, 1.0],
+            vec![-6.0, 0.0, 9.0, 6.0],
+            vec![-3.0, 0.0, -9.0, -4.0],
+        ]);
+        let m_result = Matrix::new(vec![
+            vec![-0.15385, -0.15385, -0.28205, -0.53846],
+            vec![-0.07692, 0.12308, 0.02564, 0.03077],
+            vec![0.35897, 0.35897, 0.43590, 0.92308],
+            vec![-0.69231, -0.69231, -0.76923, -1.92308],
+        ]);
+        let new_m = m.inverse(0.0, -1.0);
+        assert!(fmatrix_equals(m_result, new_m));
+
+        let m = Matrix::new(vec![
+            vec![9.0, 3.0, 0.0, 9.0],
+            vec![-5.0, -2.0, -6.0, -3.0],
+            vec![-4.0, 9.0, 6.0, 4.0],
+            vec![-7.0, 6.0, 6.0, 2.0],
+        ]);
+        let m_result = Matrix::new(vec![
+            vec![-0.04074, -0.07778, 0.14444, -0.22222],
+            vec![-0.07778, 0.03333, 0.36667, -0.33333],
+            vec![-0.02901, -0.14630, -0.10926, 0.12963],
+            vec![0.17778, 0.06667, -0.26667, 0.33333],
+        ]);
+        let new_m = m.inverse(0.0, -1.0);
+        assert!(fmatrix_equals(m_result, new_m));
+    }
+
+    #[test]
+    fn test_matrix_mulidentity() {
+        let m1 = Matrix::new(vec![
+            vec![3.0, -9.0, 7.0, 3.0],
+            vec![3.0, -8.0, 2.0, -9.0],
+            vec![-4.0, 4.0, 4.0, 1.0],
+            vec![-6.0, 5.0, -1.0, 1.0],
+        ]);
+        let m2 = Matrix::new(vec![
+            vec![8.0, 2.0, 2.0, 2.0],
+            vec![3.0, -1.0, 7.0, 0.0],
+            vec![7.0, 0.0, 5.0, 4.0],
+            vec![6.0, -2.0, 0.0, 5.0],
+        ]);
+        let m3 = &m1 * &m2;
+        let m2_inverse = m2.inverse(0.0, -1.0);
+        let new_m1 = &m3 * &m2_inverse;
+        assert!(fmatrix_equals(m1, new_m1));
     }
 }
