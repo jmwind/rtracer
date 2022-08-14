@@ -52,8 +52,13 @@ impl Canvas {
         }
     }
 
-    pub fn point(&mut self, index: usize, color: Color, diameter: usize) {
+    pub fn index(&self, x: usize, y: usize) -> usize {
+        return x + (y * self.width);
+    }
+
+    pub fn point(&mut self, point: Tupple, color: Color, diameter: usize) {
         let color_u32 = color.to_u32();
+        let index = self.index(point.x as usize, point.y as usize);
         self.buffer[index] = color_u32;
         for d in 0..diameter {
             if diameter > 1 {
@@ -66,7 +71,13 @@ impl Canvas {
     }
 
     pub fn open(&mut self) {
+        fn empty(c: &Canvas) {}
+        self.open_redraw(&empty);
+    }
+
+    pub fn open_redraw(&mut self, f: &dyn Fn(&Canvas)) {
         while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+            f(&self);
             self.window
                 .update_with_buffer(&self.buffer, self.width, self.height)
                 .unwrap();
@@ -472,10 +483,6 @@ impl Tupple {
         }
     }
 
-    pub fn index(&self, width: usize) -> usize {
-        return self.x as usize + (self.y as usize * width);
-    }
-
     pub fn add(&mut self, _other: &Tupple) {
         self.x = self.x + _other.x;
         self.y = self.y + _other.y;
@@ -618,27 +625,6 @@ impl Color {
 
 // ## MAIN ##############################
 
-struct Projectile {
-    position: Tupple,
-    velocity: Tupple,
-    color: Color,
-}
-
-struct Environment {
-    gravity: Tupple,
-    wind: Tupple,
-}
-
-fn tick(env: Environment, projectiles: &mut Vec<Projectile>) {
-    let mut gravity = env.gravity;
-    gravity.add(&env.wind);
-    // move to new position
-    for proj in projectiles {
-        proj.position.add(&proj.velocity);
-        proj.velocity.add(&gravity);
-    }
-}
-
 const WIDTH: usize = 900;
 const HEIGHT: usize = 550;
 fn main() {
@@ -650,70 +636,11 @@ fn main() {
 
     for hour in 0..12 {
         let rotate = Matrix::<f64>::z_rotation(radians(hour as f64 * 30.0));
-        let index = twelwe
-            .translate(&rotate)
-            .mul_r(radius)
-            .add_r(&offset)
-            .index(WIDTH);
-        canvas.point(index, Color::new_from_255(255, 255, 0), 3);
+        let point = twelwe.translate(&rotate).mul_r(radius).add_r(&offset);
+        canvas.point(point, Color::new_from_255(255, 255, 0), 3);
     }
 
     canvas.open();
-}
-
-fn main_throwing_rocks() {
-    let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
-
-    let mut window = Window::new(
-        "RTRACER JML - ESC to exit",
-        WIDTH,
-        HEIGHT,
-        WindowOptions::default(),
-    )
-    .unwrap_or_else(|e| {
-        panic!("{}", e);
-    });
-
-    // Limit to max ~60 fps update rate
-    window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
-    window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-
-    let mut projectiles: Vec<Projectile> = Vec::new();
-
-    projectiles.push(Projectile {
-        position: Tupple::point(0.0, 1.0, 0.0),
-        velocity: Tupple::vector(1.0, 1.4, 0.0).mul_r(6.5),
-        color: Color::new_from_255(255, 0, 180),
-    });
-    projectiles.push(Projectile {
-        position: Tupple::point(0.0, 7.0, 0.0),
-        velocity: Tupple::vector(1.0, 1.5, 0.0).mul_r(5.9),
-        color: Color::new_from_255(255, 255, 255),
-    });
-    projectiles.push(Projectile {
-        position: Tupple::point(0.0, 14.0, 0.0),
-        velocity: Tupple::vector(1.0, 1.2, 0.0).mul_r(5.0),
-        color: Color::new_from_255(255, 0, 0),
-    });
-
-    while window.is_open() && !window.is_key_down(Key::Escape) {
-        let environment = Environment {
-            gravity: Tupple::vector(0.0, -0.11, 0.0),
-            wind: Tupple::vector(-0.01, 0.0, 0.0),
-        };
-        tick(environment, &mut projectiles);
-
-        for projectile in &projectiles {
-            let x = projectile.position.x as usize;
-            let y = HEIGHT - projectile.position.y as usize;
-            if x < WIDTH && y < HEIGHT {
-                let index = x + (y * WIDTH);
-                buffer[index] = projectile.color.to_u32();
-            }
-        }
-
-        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
-    }
 }
 
 // ## TESTS ##############################
