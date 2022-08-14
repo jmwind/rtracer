@@ -28,6 +28,21 @@ struct Color {
     pub b: f32,
 }
 
+struct Ray {
+    pub origin: Tupple,
+    pub direction: Tupple,
+}
+
+impl Ray {
+    pub fn new(origin: Tupple, direction: Tupple) -> Ray {
+        Ray { origin, direction }
+    }
+
+    pub fn position(&self, distance: f64) -> Tupple {
+        return self.direction.mul_r(distance).add_r(&self.origin);
+    }
+}
+
 impl Canvas {
     pub fn new(width: usize, height: usize) -> Canvas {
         let buffer: Vec<u32> = vec![0; width * height];
@@ -1310,5 +1325,15 @@ mod tests {
             .translate(&scaling)
             .translate(&translation);
         assert_eq!(new_point, Tupple::point(15.0, 0.0, 7.0));
+    }
+
+    #[test]
+    fn test_rays() {
+        let ray = Ray::new(Tupple::point(2.0, 3.0, 4.0), Tupple::vector(1.0, 0.0, 0.0));
+        assert_eq!(ray.position(0.0), Tupple::point(2.0, 3.0, 4.0));
+        assert_eq!(ray.position(1.0), Tupple::point(3.0, 3.0, 4.0));
+        assert_eq!(ray.position(-1.0), Tupple::point(1.0, 3.0, 4.0));
+        assert_eq!(ray.position(2.5), Tupple::point(4.5, 3.0, 4.0));
+
     }
 }
