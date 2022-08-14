@@ -1,7 +1,20 @@
+use minifb::{Key, Window, WindowOptions};
 use std::ops;
 
-use minifb::{Key, Window, WindowOptions};
+const PI: f64 = 3.141592653589793238462643383279502884197169399375105;
 
+fn radians(degrees: f64) -> f64 {
+    return (degrees / 180.0) * PI;
+}
+
+struct Canvas {
+    pub buffer: Vec<u32>,
+    pub window: Window,
+    pub width: usize,
+    pub height: usize,
+}
+
+#[derive(PartialEq, Debug, Clone)]
 struct Tupple {
     pub x: f64,
     pub y: f64,
@@ -13,6 +26,52 @@ struct Color {
     pub r: f32,
     pub g: f32,
     pub b: f32,
+}
+
+impl Canvas {
+    pub fn new(width: usize, height: usize) -> Canvas {
+        let buffer: Vec<u32> = vec![0; width * height];
+        let mut window = Window::new(
+            "RTRACER JML - ESC to exit",
+            width,
+            height,
+            WindowOptions::default(),
+        )
+        .unwrap_or_else(|e| {
+            panic!("{}", e);
+        });
+
+        // Limit to max ~60 fps update rate
+        window.limit_update_rate(Some(std::time::Duration::from_micros(16600)));
+        window.update_with_buffer(&buffer, WIDTH, HEIGHT).unwrap();
+        Canvas {
+            buffer,
+            window,
+            width,
+            height,
+        }
+    }
+
+    pub fn point(&mut self, index: usize, color: Color, diameter: usize) {
+        let color_u32 = color.to_u32();
+        self.buffer[index] = color_u32;
+        for d in 0..diameter {
+            if diameter > 1 {
+                self.buffer[index + d] = color_u32;
+                self.buffer[index - d] = color_u32;
+                self.buffer[index + (self.width + d)] = color_u32;
+                self.buffer[index + (self.width - d)] = color_u32;
+            }
+        }
+    }
+
+    pub fn open(&mut self) {
+        while self.window.is_open() && !self.window.is_key_down(Key::Escape) {
+            self.window
+                .update_with_buffer(&self.buffer, self.width, self.height)
+                .unwrap();
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -94,6 +153,60 @@ impl<
         ]);
     }
 
+    pub fn translation(x: f64, y: f64, z: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![1.0, 0.0, 0.0, x],
+            vec![0.0, 1.0, 0.0, y],
+            vec![0.0, 0.0, 1.0, z],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn scaling(x: f64, y: f64, z: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![x, 0.0, 0.0, 0.0],
+            vec![0.0, y, 0.0, 0.0],
+            vec![0.0, 0.0, z, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn x_rotation(r: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, r.cos(), -r.sin(), 0.0],
+            vec![0.0, r.sin(), r.cos(), 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn y_rotation(r: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![r.cos(), 0.0, r.sin(), 0.0],
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![-r.sin(), 0.0, r.cos(), 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn z_rotation(r: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![r.cos(), -r.sin(), 0.0, 0.0],
+            vec![r.sin(), r.cos(), 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn shearing(xy: f64, xz: f64, yx: f64, yz: f64, zx: f64, zy: f64) -> Matrix<f64> {
+        return Matrix::new(vec![
+            vec![1.0, xy, xz, 0.0],
+            vec![yx, 1.0, yz, 0.0],
+            vec![zx, zy, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
     pub fn determinant_i32(m: &Matrix<i32>) -> i32 {
         return m.determinant(0, -1);
     }
@@ -153,7 +266,7 @@ impl<
     }
 
     /// Transposes a copy of the matrix and returns the result.
-    pub fn trans(&self) -> Matrix<T> {
+    pub fn transpose(&self) -> Matrix<T> {
         let mut data = vec![];
         for j in 0..self.n_cols {
             for i in 0..self.n_rows {
@@ -191,7 +304,7 @@ impl<
                 data.push(c / d);
             }
         }
-        return Matrix::create_from_data(data, self.n_cols, self.n_rows).trans();
+        return Matrix::create_from_data(data, self.n_cols, self.n_rows).transpose();
     }
 
     pub fn minor(&self, row: usize, col: usize, initial: T, transform: T) -> T {
@@ -359,6 +472,10 @@ impl Tupple {
         }
     }
 
+    pub fn index(&self, width: usize) -> usize {
+        return self.x as usize + (self.y as usize * width);
+    }
+
     pub fn add(&mut self, _other: &Tupple) {
         self.x = self.x + _other.x;
         self.y = self.y + _other.y;
@@ -454,6 +571,17 @@ impl Tupple {
             self.x * _other.y - self.y * _other.x,
         );
     }
+
+    pub fn translate(&self, matrix: &Matrix<f64>) -> Tupple {
+        let m = Matrix::new(vec![vec![self.x], vec![self.y], vec![self.z], vec![self.w]]);
+        let translation = matrix * &m;
+        return Tupple::tupple(
+            translation.get(0, 0),
+            translation.get(1, 0),
+            translation.get(2, 0),
+            translation.get(3, 0),
+        );
+    }
 }
 
 impl Color {
@@ -514,6 +642,26 @@ fn tick(env: Environment, projectiles: &mut Vec<Projectile>) {
 const WIDTH: usize = 900;
 const HEIGHT: usize = 550;
 fn main() {
+    let mut canvas = Canvas::new(WIDTH, HEIGHT);
+
+    let offset = Tupple::point(WIDTH as f64 / 2.0, HEIGHT as f64 / 2.0, 0.0);
+    let radius = 200.0;
+    let twelwe = Tupple::point(0.0, 1.0, 0.0);
+
+    for hour in 0..12 {
+        let rotate = Matrix::<f64>::z_rotation(radians(hour as f64 * 30.0));
+        let index = twelwe
+            .translate(&rotate)
+            .mul_r(radius)
+            .add_r(&offset)
+            .index(WIDTH);
+        canvas.point(index, Color::new_from_255(255, 255, 0), 3);
+    }
+
+    canvas.open();
+}
+
+fn main_throwing_rocks() {
     let mut buffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
 
     let mut window = Window::new(
@@ -535,12 +683,12 @@ fn main() {
     projectiles.push(Projectile {
         position: Tupple::point(0.0, 1.0, 0.0),
         velocity: Tupple::vector(1.0, 1.4, 0.0).mul_r(6.5),
-        color: Color::new_from_255(255, 55, 180),
+        color: Color::new_from_255(255, 0, 180),
     });
     projectiles.push(Projectile {
         position: Tupple::point(0.0, 7.0, 0.0),
         velocity: Tupple::vector(1.0, 1.5, 0.0).mul_r(5.9),
-        color: Color::new_from_255(0, 0, 255),
+        color: Color::new_from_255(255, 255, 255),
     });
     projectiles.push(Projectile {
         position: Tupple::point(0.0, 14.0, 0.0),
@@ -601,6 +749,13 @@ mod tests {
             }
         }
         return true;
+    }
+
+    fn ftupple_equals(t1: Tupple, t2: Tupple) -> bool {
+        return fequals(t1.x, t2.x)
+            && fequals(t1.y, t2.y)
+            && fequals(t1.z, t2.z)
+            && fequals(t1.w, t2.w);
     }
 
     #[test]
@@ -853,10 +1008,10 @@ mod tests {
     #[test]
     fn test_matrix_trans() {
         let m = Matrix::new(vec![vec![0, 1], vec![2, 3]]);
-        assert_eq!(m.trans(), Matrix::new(vec![vec![0, 2], vec![1, 3]]));
+        assert_eq!(m.transpose(), Matrix::new(vec![vec![0, 2], vec![1, 3]]));
 
         let identity: Matrix<i32> = Matrix::<i32>::identity_i32();
-        assert_eq!(identity.trans(), Matrix::<i32>::identity_i32());
+        assert_eq!(identity.transpose(), Matrix::<i32>::identity_i32());
     }
 
     #[test]
@@ -1076,5 +1231,157 @@ mod tests {
         let m2_inverse = m2.inverse(0.0, -1.0);
         let new_m1 = &m3 * &m2_inverse;
         assert!(fmatrix_equals(m1, new_m1));
+    }
+
+    #[test]
+    fn test_translate_point() {
+        let m_translation = Matrix::<f64>::translation(5.0, -3.0, 2.0);
+        let point = Tupple::point(-3.0, 4.0, 5.0);
+        let new_point = point.translate(&m_translation);
+        let result_point = Tupple::point(2.0, 1.0, 7.0);
+        assert_eq!(new_point, result_point);
+
+        let m_translation = Matrix::<f64>::translation(5.0, -3.0, 2.0);
+        let m_inv = m_translation.inverse(0.0, -1.0);
+        let point = Tupple::point(-3.0, 4.0, 5.0);
+        let new_point = point.translate(&m_inv);
+        let result_point = Tupple::point(-8.0, 7.0, 3.0);
+        assert_eq!(new_point, result_point);
+
+        let m_translation = Matrix::<f64>::translation(5.0, -3.0, 2.0);
+        let point = Tupple::vector(-3.0, 4.0, 5.0);
+        let new_point = point.translate(&m_translation);
+        assert_eq!(new_point, point);
+    }
+
+    #[test]
+    fn test_scaling_point() {
+        let m_translation = Matrix::<f64>::scaling(2.0, 3.0, 4.0);
+        let point = Tupple::point(-4.0, 6.0, 8.0);
+        let new_point = point.translate(&m_translation);
+        let result_point = Tupple::point(-8.0, 18.0, 32.0);
+        assert_eq!(new_point, result_point);
+
+        let m_translation = Matrix::<f64>::scaling(2.0, 3.0, 4.0);
+        let vector = Tupple::vector(-4.0, 6.0, 8.0);
+        let new_vector = vector.translate(&m_translation);
+        let result_vector = Tupple::vector(-8.0, 18.0, 32.0);
+        assert_eq!(new_vector, result_vector);
+
+        let m_translation = Matrix::<f64>::scaling(2.0, 3.0, 4.0);
+        let m_translation = m_translation.inverse(0.0, -1.0);
+        let vector = Tupple::vector(-4.0, 6.0, 8.0);
+        let new_vector = vector.translate(&m_translation);
+        let result_vector = Tupple::vector(-2.0, 2.0, 2.0);
+        assert_eq!(new_vector, result_vector);
+    }
+
+    #[test]
+    fn test_reflection_point() {
+        let m_translation = Matrix::<f64>::scaling(-1.0, 1.0, 1.0);
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let new_point = point.translate(&m_translation);
+        let result_point = Tupple::point(-2.0, 3.0, 4.0);
+        assert_eq!(new_point, result_point);
+    }
+
+    #[test]
+    fn test_rotation_x() {
+        let point = Tupple::point(0.0, 1.0, 0.0);
+        let x_rotation_half_quarter = Matrix::<f64>::x_rotation(PI / 4.0);
+        let x_rotation_full_quarter = Matrix::<f64>::x_rotation(PI / 2.2);
+        let point2 = point.translate(&x_rotation_half_quarter);
+        ftupple_equals(
+            point2,
+            Tupple::point(0.0, 2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0),
+        );
+        let point3 = point.translate(&x_rotation_full_quarter);
+        ftupple_equals(point3, Tupple::point(0.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn test_inverse_rotation_x() {
+        let point = Tupple::point(0.0, 1.0, 0.0);
+        let x_rotation_half_quarter = Matrix::<f64>::x_rotation(PI / 4.0);
+        let inv = x_rotation_half_quarter.inverse(0.0, -1.0);
+        let point2 = point.translate(&inv);
+        ftupple_equals(
+            point2,
+            Tupple::point(0.0, 2.0_f64.sqrt() / 2.0, -2.0_f64.sqrt() / 2.0),
+        );
+    }
+
+    #[test]
+    fn test_rotation_y() {
+        let point = Tupple::point(0.0, 0.0, 1.0);
+        let y_rotation_half_quarter = Matrix::<f64>::y_rotation(PI / 4.0);
+        let y_rotation_full_quarter = Matrix::<f64>::y_rotation(PI / 2.2);
+        let point2 = point.translate(&y_rotation_half_quarter);
+        ftupple_equals(
+            point2,
+            Tupple::point(2.0_f64.sqrt() / 2.0, 0.0, 2.0_f64.sqrt() / 2.0),
+        );
+        let point3 = point.translate(&y_rotation_full_quarter);
+        ftupple_equals(point3, Tupple::point(1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_rotation_z() {
+        let point = Tupple::point(0.0, 1.0, 0.0);
+        let z_rotation_half_quarter = Matrix::<f64>::z_rotation(PI / 4.0);
+        let z_rotation_full_quarter = Matrix::<f64>::z_rotation(PI / 2.2);
+        let point2 = point.translate(&z_rotation_half_quarter);
+        ftupple_equals(
+            point2,
+            Tupple::point(-2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0, 0.0),
+        );
+        let point3 = point.translate(&z_rotation_full_quarter);
+        ftupple_equals(point3, Tupple::point(-1.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_shearing() {
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(1.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(5.0, 3.0, 4.0));
+
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(0.0, 1.0, 0.0, 0.0, 0.0, 0.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(6.0, 3.0, 4.0));
+
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(0.0, 0.0, 1.0, 0.0, 0.0, 0.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(2.0, 5.0, 4.0));
+
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(0.0, 0.0, 0.0, 1.0, 0.0, 0.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(2.0, 7.0, 4.0));
+
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(2.0, 3.0, 6.0));
+
+        let point = Tupple::point(2.0, 3.0, 4.0);
+        let shearing = Matrix::<f64>::shearing(0.0, 0.0, 0.0, 0.0, 0.0, 1.0);
+        let point2 = point.translate(&shearing);
+        assert_eq!(point2, Tupple::point(2.0, 3.0, 7.0));
+    }
+
+    #[test]
+    fn test_chaining_transformations() {
+        let point = Tupple::point(1.0, 0.0, 1.0);
+        let x_rotation = Matrix::<f64>::z_rotation(PI / 2.0);
+        let scaling = Matrix::<f64>::scaling(5.0, 5.0, 5.0);
+        let translation = Matrix::<f64>::translation(10.0, 5.0, 7.0);
+        let new_point = point
+            .translate(&x_rotation)
+            .translate(&scaling)
+            .translate(&translation);
+        assert_eq!(new_point, Tupple::point(15.0, 0.0, 7.0));
     }
 }
