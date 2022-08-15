@@ -1,5 +1,6 @@
 use minifb::{Key, Window, WindowOptions};
 use std::ops;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 const PI: f64 = 3.141592653589793238462643383279502884197169399375105;
 
@@ -12,6 +13,11 @@ macro_rules! point {
 macro_rules! vector {
     ($x:expr, $y:expr, $z:expr) => {
         Tupple::vector($x as f64, $y as f64, $z as f64)
+    };
+}
+macro_rules! ray {
+    ($point:expr, $vector:expr) => {
+        Ray::new($point, $vector);
     };
 }
 
@@ -73,6 +79,45 @@ struct Color {
 struct Ray {
     pub origin: Tupple,
     pub direction: Tupple,
+}
+
+struct Sphere {
+    pub id: usize,
+    pub center: Tupple,
+    pub radius: f64,
+}
+
+static COUNTER: AtomicUsize = AtomicUsize::new(1);
+fn get_id() -> usize {
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+impl Sphere {
+    pub fn new() -> Sphere {
+        Sphere {
+            id: get_id(),
+            center: point!(0, 0, 0),
+            radius: 1.0,
+        }
+    }
+
+    pub fn intersect(&self, ray: Ray) -> Vec<f64> {
+        let mut intersections = vec![];
+
+        let sphere_to_ray = ray.origin.sub_r(&self.center);
+        let a = ray.direction.dot(&ray.direction);
+        let b = 2.0 * ray.direction.dot(&sphere_to_ray);
+        let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
+
+        let discriminant = b.powi(2) - 4.0 * a * c;
+
+        if discriminant >= 0.0 {
+            intersections.push((-b - discriminant.sqrt()) / 2.0 * a);
+            intersections.push((-b + discriminant.sqrt()) / 2.0 * a);
+        }
+
+        return intersections;
+    }
 }
 
 impl Ray {
@@ -1376,5 +1421,31 @@ mod tests {
         assert_eq!(ray.position(1.0), point!(3, 3, 4));
         assert_eq!(ray.position(-1.0), point!(1, 3, 4));
         assert_eq!(ray.position(2.5), point!(4.5, 3, 4));
+    }
+
+    #[test]
+    fn test_intersect() {
+        let ray = ray!(point!(0, 1, -5), vector!(0, 0, 1));
+        let sphere = Sphere::new();
+        let xs = sphere.intersect(ray);
+        assert!(xs[0] == 5.0);
+        assert!(xs[1] == 5.0);
+
+        let ray = ray!(point!(0, 2, -5), vector!(0, 0, 1));
+        let sphere = Sphere::new();
+        let xs = sphere.intersect(ray);
+        assert!(xs.len() == 0);
+
+        let ray = ray!(point!(0, 0, 0), vector!(0, 0, 1));
+        let sphere = Sphere::new();
+        let xs = sphere.intersect(ray);
+        assert!(xs[0] == -1.0);
+        assert!(xs[1] == 1.0);
+
+        let ray = ray!(point!(0, 0, 5), vector!(0, 0, 1));
+        let sphere = Sphere::new();
+        let xs = sphere.intersect(ray);
+        assert!(xs[0] == -6.0);
+        assert!(xs[1] == -4.0);
     }
 }
