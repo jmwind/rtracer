@@ -647,11 +647,11 @@ fn main() {
 
     let offset = Tupple::point(WIDTH as f64 / 2.0, HEIGHT as f64 / 2.0, 0.0);
     let radius = 200.0;
-    let twelwe = Tupple::point(0.0, 1.0, 0.0);
+    let six = Tupple::point(0.0, 1.0, 0.0);
 
     for hour in 0..12 {
         let rotate = Matrix::<f64>::z_rotation(radians(hour as f64 * 30.0));
-        let point = twelwe.translate(&rotate).mul_r(radius).add_r(&offset);
+        let point = six.translate(&rotate).mul_r(radius).add_r(&offset);
         canvas.point(point, Color::new_from_255(255, 255, 0), 3);
     }
 
@@ -1334,6 +1334,5 @@ mod tests {
         assert_eq!(ray.position(1.0), Tupple::point(3.0, 3.0, 4.0));
         assert_eq!(ray.position(-1.0), Tupple::point(1.0, 3.0, 4.0));
         assert_eq!(ray.position(2.5), Tupple::point(4.5, 3.0, 4.0));
-
     }
 }
