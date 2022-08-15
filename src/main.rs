@@ -3,6 +3,48 @@ use std::ops;
 
 const PI: f64 = 3.141592653589793238462643383279502884197169399375105;
 
+macro_rules! point {
+    ($x:expr, $y:expr, $z:expr) => {
+        Tupple::point($x as f64, $y as f64, $z as f64)
+    };
+}
+
+macro_rules! vector {
+    ($x:expr, $y:expr, $z:expr) => {
+        Tupple::vector($x as f64, $y as f64, $z as f64)
+    };
+}
+
+macro_rules! rotation_x {
+    ($radians:expr) => {
+        Matrix::<f64>::x_rotation($radians);
+    };
+}
+
+macro_rules! rotation_y {
+    ($radians:literal) => {
+        Matrix::<f64>::y_rotation($radians);
+    };
+}
+
+macro_rules! rotation_z {
+    ($radians:literal) => {
+        Matrix::<f64>::z_rotation($radians);
+    };
+}
+
+macro_rules! scaling {
+    ($x:expr, $y:expr, $z:expr) => {
+        Matrix::<f64>::scaling($x as f64, $y as f64, $z as f64);
+    };
+}
+
+macro_rules! translation {
+    ($x:expr, $y:expr, $z:expr) => {
+        Matrix::<f64>::translation($x as f64, $y as f64, $z as f64);
+    };
+}
+
 fn radians(degrees: f64) -> f64 {
     return (degrees / 180.0) * PI;
 }
@@ -1231,14 +1273,14 @@ mod tests {
     fn test_rotation_x() {
         let point = Tupple::point(0.0, 1.0, 0.0);
         let x_rotation_half_quarter = Matrix::<f64>::x_rotation(PI / 4.0);
-        let x_rotation_full_quarter = Matrix::<f64>::x_rotation(PI / 2.2);
+        let x_rotation_full_quarter = Matrix::<f64>::x_rotation(PI / 2.0);
         let point2 = point.translate(&x_rotation_half_quarter);
-        ftupple_equals(
+        assert!(ftupple_equals(
             point2,
             Tupple::point(0.0, 2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0),
-        );
+        ));
         let point3 = point.translate(&x_rotation_full_quarter);
-        ftupple_equals(point3, Tupple::point(0.0, 0.0, 1.0));
+        assert!(ftupple_equals(point3, Tupple::point(0.0, 0.0, 1.0)));
     }
 
     #[test]
@@ -1247,38 +1289,38 @@ mod tests {
         let x_rotation_half_quarter = Matrix::<f64>::x_rotation(PI / 4.0);
         let inv = x_rotation_half_quarter.inverse(0.0, -1.0);
         let point2 = point.translate(&inv);
-        ftupple_equals(
+        assert!(ftupple_equals(
             point2,
             Tupple::point(0.0, 2.0_f64.sqrt() / 2.0, -2.0_f64.sqrt() / 2.0),
-        );
+        ));
     }
 
     #[test]
     fn test_rotation_y() {
         let point = Tupple::point(0.0, 0.0, 1.0);
         let y_rotation_half_quarter = Matrix::<f64>::y_rotation(PI / 4.0);
-        let y_rotation_full_quarter = Matrix::<f64>::y_rotation(PI / 2.2);
+        let y_rotation_full_quarter = Matrix::<f64>::y_rotation(PI / 2.0);
         let point2 = point.translate(&y_rotation_half_quarter);
-        ftupple_equals(
+        assert!(ftupple_equals(
             point2,
             Tupple::point(2.0_f64.sqrt() / 2.0, 0.0, 2.0_f64.sqrt() / 2.0),
-        );
+        ));
         let point3 = point.translate(&y_rotation_full_quarter);
-        ftupple_equals(point3, Tupple::point(1.0, 0.0, 0.0));
+        assert!(ftupple_equals(point3, Tupple::point(1.0, 0.0, 0.0)));
     }
 
     #[test]
     fn test_rotation_z() {
         let point = Tupple::point(0.0, 1.0, 0.0);
         let z_rotation_half_quarter = Matrix::<f64>::z_rotation(PI / 4.0);
-        let z_rotation_full_quarter = Matrix::<f64>::z_rotation(PI / 2.2);
+        let z_rotation_full_quarter = Matrix::<f64>::z_rotation(PI / 2.0);
         let point2 = point.translate(&z_rotation_half_quarter);
-        ftupple_equals(
+        assert!(ftupple_equals(
             point2,
             Tupple::point(-2.0_f64.sqrt() / 2.0, 2.0_f64.sqrt() / 2.0, 0.0),
-        );
+        ));
         let point3 = point.translate(&z_rotation_full_quarter);
-        ftupple_equals(point3, Tupple::point(-1.0, 0.0, 0.0));
+        assert!(ftupple_equals(point3, Tupple::point(-1.0, 0.0, 0.0)));
     }
 
     #[test]
@@ -1316,23 +1358,23 @@ mod tests {
 
     #[test]
     fn test_chaining_transformations() {
-        let point = Tupple::point(1.0, 0.0, 1.0);
-        let x_rotation = Matrix::<f64>::z_rotation(PI / 2.0);
-        let scaling = Matrix::<f64>::scaling(5.0, 5.0, 5.0);
-        let translation = Matrix::<f64>::translation(10.0, 5.0, 7.0);
+        let point = point!(1, 0, 1);
+        let x_rotation = rotation_x!(PI / 2.0);
+        let scaling = scaling!(5, 5, 5);
+        let translation = translation!(10, 5, 7);
         let new_point = point
             .translate(&x_rotation)
             .translate(&scaling)
             .translate(&translation);
-        assert_eq!(new_point, Tupple::point(15.0, 0.0, 7.0));
+        assert!(ftupple_equals(new_point, point!(15, 0, 7)));
     }
 
     #[test]
     fn test_rays() {
-        let ray = Ray::new(Tupple::point(2.0, 3.0, 4.0), Tupple::vector(1.0, 0.0, 0.0));
-        assert_eq!(ray.position(0.0), Tupple::point(2.0, 3.0, 4.0));
-        assert_eq!(ray.position(1.0), Tupple::point(3.0, 3.0, 4.0));
-        assert_eq!(ray.position(-1.0), Tupple::point(1.0, 3.0, 4.0));
-        assert_eq!(ray.position(2.5), Tupple::point(4.5, 3.0, 4.0));
+        let ray = Ray::new(point!(2, 3, 4), vector!(1, 0, 0));
+        assert_eq!(ray.position(0.0), point!(2, 3, 4));
+        assert_eq!(ray.position(1.0), point!(3, 3, 4));
+        assert_eq!(ray.position(-1.0), point!(1, 3, 4));
+        assert_eq!(ray.position(2.5), point!(4.5, 3, 4));
     }
 }
