@@ -22,13 +22,13 @@ macro_rules! rotation_x {
 }
 
 macro_rules! rotation_y {
-    ($radians:literal) => {
+    ($radians:expr) => {
         Matrix::<f64>::y_rotation($radians);
     };
 }
 
 macro_rules! rotation_z {
-    ($radians:literal) => {
+    ($radians:expr) => {
         Matrix::<f64>::z_rotation($radians);
     };
 }
@@ -687,12 +687,12 @@ const HEIGHT: usize = 550;
 fn main() {
     let mut canvas = Canvas::new(WIDTH, HEIGHT);
 
-    let offset = Tupple::point(WIDTH as f64 / 2.0, HEIGHT as f64 / 2.0, 0.0);
+    let offset = point!(WIDTH / 2, HEIGHT / 2, 0);
     let radius = 200.0;
-    let six = Tupple::point(0.0, 1.0, 0.0);
+    let six = point!(0, 1, 0);
 
     for hour in 0..12 {
-        let rotate = Matrix::<f64>::z_rotation(radians(hour as f64 * 30.0));
+        let rotate = rotation_z!(radians(hour as f64 * 30.0));
         let point = six.translate(&rotate).mul_r(radius).add_r(&offset);
         canvas.point(point, Color::new_from_255(255, 255, 0), 3);
     }
