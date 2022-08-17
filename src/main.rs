@@ -62,7 +62,7 @@ struct Canvas {
     pub height: usize,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone)]
 struct Tupple {
     pub x: f64,
     pub y: f64,
@@ -81,15 +81,43 @@ struct Ray {
     pub direction: Tupple,
 }
 
+trait SceneObject {
+    fn get_id(&self) -> usize;
+}
+
+impl PartialEq for dyn SceneObject {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_id() == other.get_id()
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 struct Sphere {
     pub id: usize,
     pub center: Tupple,
     pub radius: f64,
 }
 
+struct Intersection {
+    pub t: f64,
+    pub object: Box<dyn SceneObject>,
+}
+
 static COUNTER: AtomicUsize = AtomicUsize::new(1);
 fn get_id() -> usize {
     COUNTER.fetch_add(1, Ordering::Relaxed)
+}
+
+impl SceneObject for Sphere {
+    fn get_id(&self) -> usize {
+        self.id
+    }
+}
+
+impl Intersection {
+    pub fn new(t: f64, object: Box<dyn SceneObject>) -> Intersection {
+        Intersection { t, object }
+    }
 }
 
 impl Sphere {
@@ -101,7 +129,7 @@ impl Sphere {
         }
     }
 
-    pub fn intersect(&self, ray: Ray) -> Vec<f64> {
+    pub fn intersect(&self, ray: Ray) -> Vec<Intersection> {
         let mut intersections = vec![];
 
         let sphere_to_ray = ray.origin.sub_r(&self.center);
@@ -112,8 +140,14 @@ impl Sphere {
         let discriminant = b.powi(2) - 4.0 * a * c;
 
         if discriminant >= 0.0 {
-            intersections.push((-b - discriminant.sqrt()) / 2.0 * a);
-            intersections.push((-b + discriminant.sqrt()) / 2.0 * a);
+            intersections.push(Intersection::new(
+                (-b - discriminant.sqrt()) / 2.0 * a,
+                Box::new(*self),
+            ));
+            intersections.push(Intersection::new(
+                (-b + discriminant.sqrt()) / 2.0 * a,
+                Box::new(*self),
+            ));
         }
 
         return intersections;
@@ -1428,8 +1462,9 @@ mod tests {
         let ray = ray!(point!(0, 1, -5), vector!(0, 0, 1));
         let sphere = Sphere::new();
         let xs = sphere.intersect(ray);
-        assert!(xs[0] == 5.0);
-        assert!(xs[1] == 5.0);
+        assert!(xs.len() == 2);
+        assert!(xs[0].t == 5.0);
+        assert!(xs[1].t == 5.0);
 
         let ray = ray!(point!(0, 2, -5), vector!(0, 0, 1));
         let sphere = Sphere::new();
@@ -1439,13 +1474,23 @@ mod tests {
         let ray = ray!(point!(0, 0, 0), vector!(0, 0, 1));
         let sphere = Sphere::new();
         let xs = sphere.intersect(ray);
-        assert!(xs[0] == -1.0);
-        assert!(xs[1] == 1.0);
+        assert!(xs.len() == 2);
+        assert!(xs[0].t == -1.0);
+        assert!(xs[1].t == 1.0);
 
         let ray = ray!(point!(0, 0, 5), vector!(0, 0, 1));
         let sphere = Sphere::new();
         let xs = sphere.intersect(ray);
-        assert!(xs[0] == -6.0);
-        assert!(xs[1] == -4.0);
+        assert!(xs.len() == 2);
+        assert!(xs[0].t == -6.0);
+        assert!(xs[1].t == -4.0);
+    }
+
+    #[test]
+    fn test_intersection_lists() {
+        let s = Sphere::new();
+        let i1 = Intersection::new(1.0, Box::new(s));
+        assert!(i1.t == 1.0);
+        assert!(i1.object.get_id() == s.get_id());
     }
 }

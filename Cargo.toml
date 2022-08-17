@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 [package]
 name = "rtracer"
 version = "0.1.0"
