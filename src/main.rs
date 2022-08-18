@@ -1,6 +1,9 @@
 use minifb::{Key, Window, WindowOptions};
+use std::cmp::Ordering;
+use std::convert::identity;
 use std::ops;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering as SyncOrdering;
 
 const PI: f64 = 3.141592653589793238462643383279502884197169399375105;
 
@@ -17,13 +20,13 @@ macro_rules! vector {
 }
 macro_rules! ray {
     ($point:expr, $vector:expr) => {
-        Ray::new($point, $vector);
+        Ray::new($point, $vector)
     };
 }
 
 macro_rules! rotation_x {
     ($radians:expr) => {
-        Matrix::<f64>::x_rotation($radians);
+        Matrix::<f64>::x_rotation($radians)
     };
 }
 
@@ -35,19 +38,25 @@ macro_rules! rotation_y {
 
 macro_rules! rotation_z {
     ($radians:expr) => {
-        Matrix::<f64>::z_rotation($radians);
+        Matrix::<f64>::z_rotation($radians)
     };
 }
 
 macro_rules! scaling {
     ($x:expr, $y:expr, $z:expr) => {
-        Matrix::<f64>::scaling($x as f64, $y as f64, $z as f64);
+        Matrix::<f64>::scaling($x as f64, $y as f64, $z as f64)
     };
 }
 
 macro_rules! translation {
     ($x:expr, $y:expr, $z:expr) => {
-        Matrix::<f64>::translation($x as f64, $y as f64, $z as f64);
+        Matrix::<f64>::translation($x as f64, $y as f64, $z as f64)
+    };
+}
+
+macro_rules! intersection {
+    ($t:expr, $object:expr) => {
+        Intersection::new($t as f64, Box::new($object))
     };
 }
 
@@ -70,12 +79,14 @@ struct Tupple {
     pub w: f64,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
 struct Color {
     pub r: f32,
     pub g: f32,
     pub b: f32,
 }
 
+#[derive(PartialEq, Debug, Copy, Clone)]
 struct Ray {
     pub origin: Tupple,
     pub direction: Tupple,
@@ -83,6 +94,8 @@ struct Ray {
 
 trait SceneObject {
     fn get_id(&self) -> usize;
+    fn set_transform(&mut self, matrix: Matrix<f64>);
+    fn intersect(self: Box<Self>, ray: Ray) -> Vec<Intersection>;
 }
 
 impl PartialEq for dyn SceneObject {
@@ -91,11 +104,12 @@ impl PartialEq for dyn SceneObject {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 struct Sphere {
     pub id: usize,
     pub center: Tupple,
     pub radius: f64,
+    pub transform: Matrix<f64>,
 }
 
 struct Intersection {
@@ -103,14 +117,47 @@ struct Intersection {
     pub object: Box<dyn SceneObject>,
 }
 
+struct Intersections {
+    intersections: Vec<Intersection>,
+}
+
 static COUNTER: AtomicUsize = AtomicUsize::new(1);
 fn get_id() -> usize {
-    COUNTER.fetch_add(1, Ordering::Relaxed)
+    COUNTER.fetch_add(1, SyncOrdering::Relaxed)
 }
 
 impl SceneObject for Sphere {
     fn get_id(&self) -> usize {
         self.id
+    }
+    fn intersect(self: Box<Self>, ray2: Ray) -> Vec<Intersection> {
+        let mut intersections = vec![];
+
+        let inverse = self.transform.inverse(0.0, -1.0);
+        let new_ray = ray2.transform(&inverse);
+        let sphere_to_ray = new_ray.origin.sub_r(&self.center);
+        let a = new_ray.direction.dot(&new_ray.direction);
+        let b = 2.0 * new_ray.direction.dot(&sphere_to_ray);
+        let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
+
+        let discriminant = b.powi(2) - 4.0 * a * c;
+
+        if discriminant >= 0.0 {
+            intersections.push(Intersection::new(
+                (-b - discriminant.sqrt()) / 2.0 * a,
+                self.clone(),
+            ));
+            intersections.push(Intersection::new(
+                (-b + discriminant.sqrt()) / 2.0 * a,
+                self.clone(),
+            ));
+        }
+
+        return intersections;
+    }
+
+    fn set_transform(&mut self, matrix: Matrix<f64>) {
+        self.transform = matrix;
     }
 }
 
@@ -120,37 +167,41 @@ impl Intersection {
     }
 }
 
+impl Intersections {
+    pub fn new() -> Intersections {
+        Intersections {
+            intersections: vec![],
+        }
+    }
+    pub fn hit(&mut self) -> &Intersection {
+        return &self.intersections[0];
+    }
+    pub fn add(&mut self, i: Intersection) {
+        self.intersections.push(i);
+        self.intersections.sort_by(|a, b| {
+            if a.t <= 0.0 {
+                Ordering::Greater
+            } else if b.t <= 0.0 {
+                Ordering::Less
+            } else if a.t < b.t {
+                Ordering::Less
+            } else if a.t == b.t {
+                Ordering::Equal
+            } else {
+                Ordering::Greater
+            }
+        });
+    }
+}
+
 impl Sphere {
     pub fn new() -> Sphere {
         Sphere {
             id: get_id(),
             center: point!(0, 0, 0),
             radius: 1.0,
+            transform: Matrix::<f64>::identity_f64(),
         }
-    }
-
-    pub fn intersect(&self, ray: Ray) -> Vec<Intersection> {
-        let mut intersections = vec![];
-
-        let sphere_to_ray = ray.origin.sub_r(&self.center);
-        let a = ray.direction.dot(&ray.direction);
-        let b = 2.0 * ray.direction.dot(&sphere_to_ray);
-        let c = sphere_to_ray.dot(&sphere_to_ray) - 1.0;
-
-        let discriminant = b.powi(2) - 4.0 * a * c;
-
-        if discriminant >= 0.0 {
-            intersections.push(Intersection::new(
-                (-b - discriminant.sqrt()) / 2.0 * a,
-                Box::new(*self),
-            ));
-            intersections.push(Intersection::new(
-                (-b + discriminant.sqrt()) / 2.0 * a,
-                Box::new(*self),
-            ));
-        }
-
-        return intersections;
     }
 }
 
@@ -161,6 +212,12 @@ impl Ray {
 
     pub fn position(&self, distance: f64) -> Tupple {
         return self.direction.mul_r(distance).add_r(&self.origin);
+    }
+
+    pub fn transform(&self, matrix: &Matrix<f64>) -> Ray {
+        let new_origin = self.origin.translate(matrix);
+        let new_direction = self.direction.translate(matrix);
+        return Ray::new(new_origin, new_direction);
     }
 }
 
@@ -283,6 +340,15 @@ impl<
     }
 
     pub fn identity_f32() -> Matrix<f32> {
+        return Matrix::new(vec![
+            vec![1.0, 0.0, 0.0, 0.0],
+            vec![0.0, 1.0, 0.0, 0.0],
+            vec![0.0, 0.0, 1.0, 0.0],
+            vec![0.0, 0.0, 0.0, 1.0],
+        ]);
+    }
+
+    pub fn identity_f64() -> Matrix<f64> {
         return Matrix::new(vec![
             vec![1.0, 0.0, 0.0, 0.0],
             vec![0.0, 1.0, 0.0, 0.0],
@@ -1460,26 +1526,26 @@ mod tests {
     #[test]
     fn test_intersect() {
         let ray = ray!(point!(0, 1, -5), vector!(0, 0, 1));
-        let sphere = Sphere::new();
+        let sphere = Box::new(Sphere::new());
         let xs = sphere.intersect(ray);
         assert!(xs.len() == 2);
         assert!(xs[0].t == 5.0);
         assert!(xs[1].t == 5.0);
 
         let ray = ray!(point!(0, 2, -5), vector!(0, 0, 1));
-        let sphere = Sphere::new();
+        let sphere = Box::new(Sphere::new());
         let xs = sphere.intersect(ray);
         assert!(xs.len() == 0);
 
         let ray = ray!(point!(0, 0, 0), vector!(0, 0, 1));
-        let sphere = Sphere::new();
+        let sphere = Box::new(Sphere::new());
         let xs = sphere.intersect(ray);
         assert!(xs.len() == 2);
         assert!(xs[0].t == -1.0);
         assert!(xs[1].t == 1.0);
 
         let ray = ray!(point!(0, 0, 5), vector!(0, 0, 1));
-        let sphere = Sphere::new();
+        let sphere = Box::new(Sphere::new());
         let xs = sphere.intersect(ray);
         assert!(xs.len() == 2);
         assert!(xs[0].t == -6.0);
@@ -1489,8 +1555,61 @@ mod tests {
     #[test]
     fn test_intersection_lists() {
         let s = Sphere::new();
-        let i1 = Intersection::new(1.0, Box::new(s));
+        let id = s.get_id();
+        let i1 = intersection!(1, s);
         assert!(i1.t == 1.0);
-        assert!(i1.object.get_id() == s.get_id());
+        assert!(i1.object.get_id() == id);
+
+        let s = Sphere::new();
+        let i1 = intersection!(5, s);
+        let s = Sphere::new();
+        let i2 = intersection!(7, s);
+        let s = Sphere::new();
+        let i3 = intersection!(-3, s);
+        let s = Sphere::new();
+        let i4 = intersection!(2, s);
+        let mut intersections = Intersections::new();
+        intersections.add(i1);
+        intersections.add(i2);
+        intersections.add(i3);
+        intersections.add(i4);
+        let hit = intersections.hit();
+        assert!(hit.t == 2.0);
+    }
+
+    #[test]
+    fn test_ray_translations() {
+        let r = Ray::new(point!(1, 2, 3), vector!(0, 1, 0));
+        let m = translation!(3, 4, 5);
+        let r2 = r.transform(&m);
+        assert!(r2.origin == point!(4, 6, 8));
+        assert!(r2.direction == r.direction);
+
+        let r = Ray::new(point!(1, 2, 3), vector!(0, 1, 0));
+        let m = scaling!(2, 3, 4);
+        let r2 = r.transform(&m);
+        assert!(r2.origin == point!(2, 6, 12));
+        assert!(r2.direction == vector!(0, 3, 0))
+    }
+
+    #[test]
+    fn test_sphere_transforms() {
+        let mut s = Sphere::new();
+        s.set_transform(translation!(2, 3, 4));
+        fmatrix_equals(translation!(2, 3, 4), s.transform);
+
+        let r = Ray::new(point!(0, 0, -5), vector!(0, 0, 1));
+        let mut s = Box::new(Sphere::new());
+        s.set_transform(translation!(5, 0, 0));
+        let xs = s.intersect(r);
+        assert!(xs.len() == 0);
+
+        let r = Ray::new(point!(0, 0, -5), vector!(0, 0, 1));
+        let mut s = Box::new(Sphere::new());
+        s.set_transform(scaling!(2, 2, 2));
+        let xs = s.intersect(r);
+        assert!(xs.len() == 2);
+        assert!(xs[0].t == 3.0);
+        assert!(xs[1].t == 7.0);
     }
 }
